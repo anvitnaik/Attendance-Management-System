@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Attendance Management System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Attendance Management System</h1>
+      </header>
+
+      <main>
+        <section class="card">
+          <h2>Students</h2>
+          <form id="student-form" class="form-grid">
+            <input
+              type="text"
+              id="student-name"
+              placeholder="Name"
+              required
+            />
+            <input
+              type="text"
+              id="student-roll"
+              placeholder="Roll Number"
+              required
+            />
+            <input type="email" id="student-email" placeholder="Email" />
+            <button type="submit">Add Student</button>
+          </form>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Roll</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="students-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="attendance-header">
+            <h2>Daily Attendance</h2>
+            <div>
+              <label for="attendance-date">Date: </label>
+              <input type="date" id="attendance-date" />
+              <button id="refresh-attendance">Load</button>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Roll</th>
+                  <th>Name</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="attendance-table-body"></tbody>
+            </table>
+          </div>
+          <button id="save-attendance" class="primary">Save Attendance</button>
+        </section>
+
+        <section class="card full-width">
+          <h2>All Attendance Records</h2>
+          <button id="load-all-attendance" class="primary">Load All Records</button>
+          <div class="table-wrapper" style="margin-top: 1rem;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Roll</th>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="all-attendance-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span id="status-text"></span>
+      </footer>
+    </div>
+
+    <script>
+      const apiBase = '/api';
+
+      const statusText = document.getElementById('status-text');
+      function setStatus(message, isError = false) {
+        statusText.textContent = message;
+        statusText.className = isError ? 'error' : 'success';
+        if (message) {
+          setTimeout(() => {
+            statusText.textContent = '';
+            statusText.className = '';
+          }, 4000);
+        }
+      }
+
+      async function fetchJson(url, options = {}) {
+        try {
+          console.log('Fetching:', url, options);
+          const res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' },
+            ...options,
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            console.error('Response error:', res.status, text);
+            throw new Error(`${res.status}: ${text}`);
+          }
+          const data = await res.json();
+          console.log('Response data:', data);
+          return data;
+        } catch (err) {
+          console.error('Fetch error:', err);
+          throw err;
+        }
+      }
+
+      async function loadStudents() {
+        try {
+          console.log('=== Loading Students ===');
+          const students = await fetchJson(`${apiBase}/students`);
+          console.log('Students received:', students);
+          
+          const tbody = document.getElementById('students-table-body');
+          tbody.innerHTML = '';
+          
+          if (!students || students.length === 0) {
+            console.log('No students found');
+            return;
+          }
+
+          students.forEach((s) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${s.rollNumber}</td>
+              <td>${s.name}</td>
+              <td>${s.email || ''}</td>
+              <td><button data-id="${s._id}" class="danger">Delete</button></td>
+            `;
+            tbody.appendChild(tr);
+            console.log('Added student:', s.name);
+          });
+          console.log('Students table updated');
+        } catch (err) {
+          console.error('Error loading students:', err);
+          setStatus('Failed to load students: ' + err.message, true);
+        }
+      }
+
+      async function loadAttendance() {
+        try {
+          console.log('=== Loading Attendance ===');
+          const dateInput = document.getElementById('attendance-date');
+          const date = dateInput.value;
+          console.log('Loading attendance for date:', date);
+          
+          const data = await fetchJson(
+            `${apiBase}/attendance?date=${encodeURIComponent(date)}`
+          );
+          console.log('Attendance data received:', data);
+
+          const tbody = document.getElementById('attendance-table-body');
+          tbody.innerHTML = '';
+          
+          if (!data.records || data.records.length === 0) {
+            console.log('No attendance records');
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="3" style="text-align:center;">No students available</td>';
+            tbody.appendChild(tr);
+            return;
+          }
+
+          data.records.forEach((r) => {
+            const tr = document.createElement('tr');
+            tr.dataset.studentId = r.studentId;
+            tr.innerHTML = `
+              <td>${r.rollNumber}</td>
+              <td>${r.name}</td>
+              <td>
+                <select>
+                  <option value="present"${
+                    r.status === 'present' ? ' selected' : ''
+                  }>Present</option>
+                  <option value="absent"${
+                    r.status === 'absent' ? ' selected' : ''
+                  }>Absent</option>
+                </select>
+              </td>
+            `;
+            tbody.appendChild(tr);
+            console.log('Added attendance row:', r.name);
+          });
+          console.log('Attendance table updated');
+        } catch (err) {
+          console.error('Error loading attendance:', err);
+          setStatus('Failed to load attendance: ' + err.message, true);
+        }
+      }
+
+      async function saveAttendance() {
+        try {
+          console.log('=== Saving Attendance ===');
+          const dateInput = document.getElementById('attendance-date');
+          const date = dateInput.value;
+          const rows = Array.from(
+            document.querySelectorAll('#attendance-table-body tr')
+          );
+          const records = rows.map((row) => ({
+            studentId: row.dataset.studentId,
+            status: row.querySelector('select').value,
+          }));
+
+          console.log('Saving records:', records);
+          await fetchJson(`${apiBase}/attendance`, {
+            method: 'POST',
+            body: JSON.stringify({ date, records }),
+          });
+
+          setStatus('Attendance saved successfully');
+        } catch (err) {
+          console.error('Error saving attendance:', err);
+          setStatus('Failed to save attendance: ' + err.message, true);
+        }
+      }
+
+      async function loadAllAttendance() {
+        try {
+          console.log('=== Loading All Attendance Records ===');
+          const records = await fetchJson(`${apiBase}/attendance/all`);
+          console.log('All attendance records:', records);
+
+          const tbody = document.getElementById('all-attendance-body');
+          tbody.innerHTML = '';
+
+          if (!records || records.length === 0) {
+            console.log('No attendance records found');
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align:center;">No attendance records</td>';
+            tbody.appendChild(tr);
+            return;
+          }
+
+          records.forEach((r) => {
+            const tr = document.createElement('tr');
+            tr.dataset.recordId = r._id;
+            tr.innerHTML = `
+              <td>${r.date}</td>
+              <td>${r.rollNumber}</td>
+              <td>${r.name}</td>
+              <td>
+                <select class="attendance-status" data-status="${r.status}">
+                  <option value="present"${r.status === 'present' ? ' selected' : ''}>Present</option>
+                  <option value="absent"${r.status === 'absent' ? ' selected' : ''}>Absent</option>
+                </select>
+              </td>
+              <td><button class="update-attendance" data-id="${r._id}">Update</button></td>
+            `;
+            tbody.appendChild(tr);
+          });
+
+          // Attach event listeners to update buttons
+          document.querySelectorAll('.update-attendance').forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              await updateAttendanceRecord(btn.dataset.id);
+            });
+          });
+
+          console.log('All attendance table updated with ' + records.length + ' records');
+        } catch (err) {
+          console.error('Error loading all attendance:', err);
+          setStatus('Failed to load attendance records: ' + err.message, true);
+        }
+      }
+
+      async function updateAttendanceRecord(recordId) {
+        try {
+          console.log('=== Updating Attendance Record ===', recordId);
+          const btn = document.querySelector(`button[data-id="${recordId}"]`);
+          const select = btn.closest('tr').querySelector('select');
+          const status = select.value;
+
+          console.log('New status:', status);
+          await fetchJson(`${apiBase}/attendance/${recordId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status }),
+          });
+
+          setStatus('Attendance updated successfully');
+          await loadAllAttendance();
+        } catch (err) {
+          console.error('Error updating attendance:', err);
+          setStatus('Failed to update attendance: ' + err.message, true);
+        }
+      }
+
+      function setupEventHandlers() {
+        const studentForm = document.getElementById('student-form');
+        
+        studentForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          console.log('=== Form Submitted ===');
+          
+          const name = document.getElementById('student-name').value.trim();
+          const roll = document.getElementById('student-roll').value.trim();
+          const email = document.getElementById('student-email').value.trim();
+          
+          console.log('Form values:', { name, roll, email });
+          
+          if (!name || !roll) {
+            setStatus('Name and Roll Number are required', true);
+            return;
+          }
+
+          try {
+            console.log('Adding student...');
+            const result = await fetchJson(`${apiBase}/students`, {
+              method: 'POST',
+              body: JSON.stringify({ name, rollNumber: roll, email }),
+            });
+            console.log('Student added:', result);
+            
+            studentForm.reset();
+            setStatus('Student added successfully!');
+            
+            // Reload both tables
+            await loadStudents();
+            await loadAttendance();
+          } catch (err) {
+            console.error('Error adding student:', err);
+            setStatus('Failed to add student: ' + err.message, true);
+          }
+        });
+
+        document
+          .getElementById('students-table-body')
+          .addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-id]');
+            if (!btn) return;
+            
+            const id = btn.dataset.id;
+            console.log('=== Deleting Student ===', id);
+            
+            if (!confirm('Are you sure you want to delete this student?')) return;
+            
+            try {
+              await fetchJson(`${apiBase}/students/${id}`, {
+                method: 'DELETE',
+              });
+              setStatus('Student deleted successfully');
+              await loadStudents();
+              await loadAttendance();
+            } catch (err) {
+              console.error('Error deleting student:', err);
+              setStatus('Failed to delete student: ' + err.message, true);
+            }
+          });
+
+        document
+          .getElementById('refresh-attendance')
+          .addEventListener('click', () => {
+            console.log('=== Refresh Attendance Clicked ===');
+            loadAttendance();
+          });
+
+        document
+          .getElementById('save-attendance')
+          .addEventListener('click', saveAttendance);
+
+        document
+          .getElementById('load-all-attendance')
+          .addEventListener('click', () => {
+            console.log('=== Load All Attendance Clicked ===');
+            loadAllAttendance();
+          });
+      }
+
+      function init() {
+        console.log('=== Initializing App ===');
+        
+        const dateInput = document.getElementById('attendance-date');
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${yyyy}-${mm}-${dd}`;
+        console.log('Date set to:', dateInput.value);
+
+        setupEventHandlers();
+        console.log('Event handlers setup complete');
+        
+        // Load initial data
+        loadStudents().then(() => {
+          console.log('Students loaded, now loading attendance');
+          return loadAttendance();
+        }).catch((err) => {
+          console.error('Error during initialization:', err);
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM Content Loaded');
+        init();
+      });
+    </script>
+  </body>
+  </html>
+
