@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const MONGODB_URI =
-  process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/attendance_db';
+  process.env.MONGODB_URI || 'mongodb+srv://anvitnaik18_db_user:YUR2X6eVhPCtmWyd@attendence.biqc9hd.mongodb.net/';
 
 async function connectDb() {
   try {
